@@ -1,0 +1,90 @@
+-- Cross-Server Matchmaking System
+-- Works with MemoryStoreQueue, MessagingService, and TeleportService
+
+-- Services
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local TeleportService = game:GetService("TeleportService")
+local MessagingService = game:GetService("MessagingService")
+local Players = game:GetService("Players")
+
+-- Constants
+local PLACE_ID = 12345678 -- Replace with your actual place ID
+local QUEUE_NAME = "MatchmakingQueue"
+local MIN_PLAYERS = 4
+local MAX_PLAYERS = 8
+
+-- Matchmaking Loop (server-side)
+local function MatchmakingLoop()
+	local queue = MemoryStoreService:GetQueue(QUEUE_NAME)
+
+	while true do
+		task.wait(5)
+
+		local success, players = pcall(function()
+			return queue:ReadAsync(MAX_PLAYERS, false, 0)
+		end)
+
+		if success and players and #players >= MIN_PLAYERS then
+			-- Reserve a private server
+			local code, reservedServer = TeleportService:ReserveServer(PLACE_ID)
+			local userIds = {}
+			for _, entry in pairs(players) do
+				table.insert(userIds, tonumber(entry.key))
+			end
+
+			-- Teleport users
+			TeleportService:TeleportToPrivateServer(PLACE_ID, reservedServer, userIds)
+		end
+	end
+end
+
+-- Start loop on server startup
+coroutine.wrap(MatchmakingLoop)()
+
+-- Add Player to Queue (on join)
+Players.PlayerAdded:Connect(function(player)
+	task.wait(2)
+	local queue = MemoryStoreService:GetQueue(QUEUE_NAME)
+	pcall(function()
+		queue:AddAsync(player.UserId, 60)
+	end)
+end)
+
+-- Optional: Remove on leave
+Players.PlayerRemoving:Connect(function(player)
+	-- No need to manually remove due to expiration
+end)
+
+-- MessagingService could be added for inter-server signals
+-- Example: Send match started notifications, handle requeues, etc.
+
+--[[
+README - Cross-Server Matchmaking System
+========================================
+
+This is a simple cross-server matchmaking system built for Roblox using:
+- MemoryStoreService (Queue)
+- TeleportService (Private Server Teleport)
+- MessagingService (optional for inter-server communication)
+
+📦 FEATURES:
+- Automatically queues players when they join
+- Every 5 seconds checks for players in queue
+- If enough players are found (MIN_PLAYERS to MAX_PLAYERS), teleports them to a reserved server
+
+🛠 SETUP:
+1. Enable "MemoryStoreService" and "MessagingService" in your game settings
+2. Replace the `PLACE_ID` with the ID of your game/place
+3. Paste this script into **ServerScriptService**
+4. Test with multiple players in Team Test or Studio Sessions
+
+📌 NOTES:
+- Queue entries expire in 60 seconds (you can modify this)
+- You can expand this with party systems, skill-based matchmaking, GUI indicators, and MessagingService
+
+✉️ MessagingService Integration (optional):
+- Broadcast start-of-match or failure signals to all servers
+- Useful for syncing parties, retrying queues, logging, etc.
+
+Developed as a core matchmaking system to integrate with any competitive or team-based Roblox experience.
+]]
